@@ -12,6 +12,7 @@ import {
   useEditorStore
 } from '@/app/editor/active-store'
 import { loadFont } from '@/app/editor/fonts'
+import { logSplitPaneDebug } from '@/app/editor/panes/debug'
 import { restorePanePageViewport, savePanePageViewport } from '@/app/editor/panes/page-viewports'
 import { composePaneRenderState } from '@/app/editor/panes/render-state'
 import {
@@ -90,6 +91,7 @@ export function createEditorStore(initialGraph?: SceneGraph) {
   function runPaneCleanup(paneId: string): void {
     const handlers = paneCleanupHandlers.get(paneId)
     if (!handlers) return
+    logSplitPaneDebug('run-pane-cleanup', { paneId, handlerCount: handlers.size })
     for (const cleanup of handlers) cleanup()
   }
 
@@ -105,6 +107,11 @@ export function createEditorStore(initialGraph?: SceneGraph) {
 
   function setActivePane(paneId: string) {
     if (panes.activePaneId.value === paneId || !panes.getPane(paneId)) return
+    if (panes.splitResizeActive.value) {
+      logSplitPaneDebug('set-active-pane-blocked', { from: panes.activePaneId.value, to: paneId })
+      return
+    }
+    logSplitPaneDebug('set-active-pane', { from: panes.activePaneId.value, to: paneId })
     runPaneCleanup(panes.activePaneId.value)
     if (state.editingTextId) editor.commitTextEdit()
     panes.setActivePane(paneId)
@@ -156,6 +163,14 @@ export function createEditorStore(initialGraph?: SceneGraph) {
     return paneId
   }
 
+  function requestRepaint() {
+    const activePaneId = panes.activePaneId.value
+    for (const pane of panes.panes.value.values()) {
+      if (pane.id !== activePaneId) pane.renderVersion++
+    }
+    editor.requestRepaint()
+  }
+
   const store = {
     ...editor,
     state,
@@ -165,11 +180,14 @@ export function createEditorStore(initialGraph?: SceneGraph) {
     panes,
     splitTree: panes.splitTree,
     activePaneId: panes.activePaneId,
+    splitResizeActive: panes.splitResizeActive,
     visiblePaneCount: panes.visiblePaneCount,
     maxVisiblePanes: panes.maxVisiblePanes,
     getPane: panes.getPane,
     getActivePane: panes.getActivePane,
+    requestRepaint,
     setActivePane,
+    setSplitResizeActive: panes.setSplitResizeActive,
     splitPane,
     closePane,
     ensureSinglePane,

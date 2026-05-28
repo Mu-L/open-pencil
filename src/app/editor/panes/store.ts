@@ -5,6 +5,7 @@ import type { SceneGraph } from '@open-pencil/core/scene-graph'
 import type { AppEditorState } from '@/app/editor/session/types'
 
 import { createCanvasPaneState, clonePaneForSplit } from './create'
+import { logSplitPaneDebug } from './debug'
 import {
   closePaneNode,
   containsPane,
@@ -70,6 +71,7 @@ export function createCanvasPaneRegistry({ graph, state }: PaneRegistryOptions) 
   const panes = shallowRef(new Map([[initialPane.id, initialPane]]))
   const activePaneId = ref(initialPane.id)
   const splitTree = ref<CanvasSplitNode>({ type: 'pane', paneId: initialPane.id })
+  const splitResizeActive = ref(false)
   const visiblePaneCount = computed(() => paneCount(splitTree.value))
 
   function getPane(id: string): AppCanvasPaneState | undefined {
@@ -97,8 +99,12 @@ export function createCanvasPaneRegistry({ graph, state }: PaneRegistryOptions) 
   }
 
   function setActivePane(id: string): void {
-    if (!getPane(id)) return
+    if (!getPane(id) || splitResizeActive.value) return
     activePaneId.value = id
+  }
+
+  function setSplitResizeActive(active: boolean): void {
+    splitResizeActive.value = active
   }
 
   function splitPane(id: string, direction: SplitDirection): SplitPaneResult {
@@ -154,6 +160,7 @@ export function createCanvasPaneRegistry({ graph, state }: PaneRegistryOptions) 
   }
 
   function updateSplitSizes(splitId: string, sizes: number[]): void {
+    logSplitPaneDebug('update-split-sizes', { splitId, sizes, activePaneId: activePaneId.value })
     splitTree.value = updateSplitNodeSizes(splitTree.value, splitId, sizes)
   }
 
@@ -194,10 +201,12 @@ export function createCanvasPaneRegistry({ graph, state }: PaneRegistryOptions) 
     panes,
     splitTree,
     activePaneId,
+    splitResizeActive,
     visiblePaneCount,
     getPane,
     getActivePane,
     setActivePane,
+    setSplitResizeActive,
     splitPane,
     closePane,
     ensureSinglePane,
